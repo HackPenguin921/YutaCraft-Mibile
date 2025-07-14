@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>スマホ専用バトル</title>
+  <title>スマホバトル完全版</title>
   <style>
-    html, body { margin: 0; background: #000; font-family: sans-serif; overflow: hidden; }
+    html, body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
     canvas { display: block; margin: 0 auto; background: #222; touch-action: none; }
     #ui {
       position: absolute; top: 10px; width: 100%;
@@ -14,7 +14,7 @@
     #touchControls {
       position: fixed; bottom: 20px; left: 0; right: 0;
       display: flex; justify-content: center; flex-wrap: wrap;
-      gap: 10px; padding: 10px;
+      gap: 10px; padding: 10px; z-index: 20;
     }
     .btn {
       width: 60px; height: 60px; font-size: 18px;
@@ -45,9 +45,15 @@
 let canvas = document.getElementById("game");
 let ctx = canvas.getContext("2d");
 
-let player = { x: 50, y: 540, w: 40, h: 80, hp: 100, vy: 0, onGround: true };
-let cpu = { x: 260, y: 540, w: 40, h: 80, hp: 100, dir: -1 };
+let player = { x: 50, y: 540, w: 60, h: 80, hp: 100, vy: 0, onGround: true };
+let cpu = { x: 250, y: 540, w: 60, h: 80, hp: 100, dir: -1 };
 let keys = {};
+
+let playerImg = new Image();
+playerImg.src = "yuta.png"; // ← 自分のフォルダに置いてね
+
+let cpuImg = new Image();
+cpuImg.src = "zombie.png"; // ← 自分のフォルダに置いてね
 
 function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -73,27 +79,27 @@ function update() {
 
   // 攻撃
   if (keys["atk"]) {
-    if (Math.abs(player.x - cpu.x) < 50) cpu.hp -= 0.3;
+    if (Math.abs(player.x - cpu.x) < 60) cpu.hp -= 0.3;
   }
 
-  // CPU移動・攻撃
+  // CPU自動移動・攻撃
   cpu.x += cpu.dir * 2;
-  if (cpu.x < 60 || cpu.x > 260) cpu.dir *= -1;
-  if (Math.abs(cpu.x - player.x) < 50) player.hp -= 0.2;
+  if (cpu.x < 50 || cpu.x > 250) cpu.dir *= -1;
+  if (Math.abs(cpu.x - player.x) < 60) player.hp -= 0.2;
 
   // 描画
-  ctx.fillStyle = "blue";
-  ctx.fillRect(player.x, player.y, player.w, player.h);
-  ctx.fillStyle = "red";
-  ctx.fillRect(cpu.x, cpu.y, cpu.w, cpu.h);
+  ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
+  ctx.drawImage(cpuImg, cpu.x, cpu.y, cpu.w, cpu.h);
 
   document.getElementById("php").textContent = Math.max(0, Math.floor(player.hp));
   document.getElementById("ehp").textContent = Math.max(0, Math.floor(cpu.hp));
 
-  // 勝敗
   if (player.hp <= 0 || cpu.hp <= 0) {
-    alert((player.hp > cpu.hp ? "PLAYER" : "CPU") + " WINS!");
-    location.reload();
+    setTimeout(() => {
+      alert((player.hp > cpu.hp ? "PLAYER" : "CPU") + " WINS!");
+      location.reload();
+    }, 200);
+    return;
   }
 
   requestAnimationFrame(update);
@@ -101,8 +107,8 @@ function update() {
 update();
 
 function special() {
-  let audio = document.getElementById("sfx");
-  if (Math.abs(player.x - cpu.x) < 80) cpu.hp -= 10;
+  const audio = document.getElementById("sfx");
+  if (Math.abs(player.x - cpu.x) < 100) cpu.hp -= 10;
   audio.currentTime = 0;
   audio.play();
 }
