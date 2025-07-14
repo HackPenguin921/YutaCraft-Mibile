@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スマホ専用バトル</title>
+  <style>
+    html, body { margin: 0; background: #000; font-family: sans-serif; overflow: hidden; }
+    canvas { display: block; margin: 0 auto; background: #222; touch-action: none; }
+    #ui {
+      position: absolute; top: 10px; width: 100%;
+      color: white; text-align: center; z-index: 10;
+    }
+    #touchControls {
+      position: fixed; bottom: 20px; left: 0; right: 0;
+      display: flex; justify-content: center; flex-wrap: wrap;
+      gap: 10px; padding: 10px;
+    }
+    .btn {
+      width: 60px; height: 60px; font-size: 18px;
+      background: rgba(255,255,255,0.2); color: white;
+      border: 1px solid white; border-radius: 8px;
+      user-select: none; touch-action: none;
+      display: flex; align-items: center; justify-content: center;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="game" width="360" height="640"></canvas>
+<div id="ui">
+  <div>PLAYER HP: <span id="php">100</span> / CPU HP: <span id="ehp">100</span></div>
+</div>
+<div id="touchControls">
+  <div class="btn" ontouchstart="keys['left']=true" ontouchend="keys['left']=false">←</div>
+  <div class="btn" ontouchstart="keys['right']=true" ontouchend="keys['right']=false">→</div>
+  <div class="btn" ontouchstart="keys['jump']=true" ontouchend="keys['jump']=false">↑</div>
+  <div class="btn" ontouchstart="keys['atk']=true" ontouchend="keys['atk']=false">攻</div>
+  <div class="btn" ontouchstart="special()">必</div>
+</div>
+
+<audio id="sfx" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_abe9dd2c81.mp3" preload="auto"></audio>
+
+<script>
+let canvas = document.getElementById("game");
+let ctx = canvas.getContext("2d");
+
+let player = { x: 50, y: 540, w: 40, h: 80, hp: 100, vy: 0, onGround: true };
+let cpu = { x: 260, y: 540, w: 40, h: 80, hp: 100, dir: -1 };
+let keys = {};
+
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 移動
+  if (keys["left"]) player.x -= 4;
+  if (keys["right"]) player.x += 4;
+
+  // ジャンプ
+  if (keys["jump"] && player.onGround) {
+    player.vy = -12;
+    player.onGround = false;
+  }
+
+  // 重力
+  player.vy += 0.5;
+  player.y += player.vy;
+  if (player.y > 540) {
+    player.y = 540;
+    player.vy = 0;
+    player.onGround = true;
+  }
+
+  // 攻撃
+  if (keys["atk"]) {
+    if (Math.abs(player.x - cpu.x) < 50) cpu.hp -= 0.3;
+  }
+
+  // CPU移動・攻撃
+  cpu.x += cpu.dir * 2;
+  if (cpu.x < 60 || cpu.x > 260) cpu.dir *= -1;
+  if (Math.abs(cpu.x - player.x) < 50) player.hp -= 0.2;
+
+  // 描画
+  ctx.fillStyle = "blue";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillStyle = "red";
+  ctx.fillRect(cpu.x, cpu.y, cpu.w, cpu.h);
+
+  document.getElementById("php").textContent = Math.max(0, Math.floor(player.hp));
+  document.getElementById("ehp").textContent = Math.max(0, Math.floor(cpu.hp));
+
+  // 勝敗
+  if (player.hp <= 0 || cpu.hp <= 0) {
+    alert((player.hp > cpu.hp ? "PLAYER" : "CPU") + " WINS!");
+    location.reload();
+  }
+
+  requestAnimationFrame(update);
+}
+update();
+
+function special() {
+  let audio = document.getElementById("sfx");
+  if (Math.abs(player.x - cpu.x) < 80) cpu.hp -= 10;
+  audio.currentTime = 0;
+  audio.play();
+}
+</script>
+
+</body>
+</html>
