@@ -2,117 +2,202 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <title>スト6風バトルゲーム</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>スマホバトル完全版</title>
   <style>
-    html, body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-    canvas { display: block; margin: 0 auto; background: #222; touch-action: none; }
-    #ui {
-      position: absolute; top: 10px; width: 100%;
-      color: white; text-align: center; z-index: 10;
-    }
+    body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
+    canvas { background: #222; display: none; margin: auto; touch-action: none; }
+    #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; color: white; font-size: 18px; display: none; z-index: 5; }
+    .bar { width: 45vw; height: 20px; background: red; border: 2px solid #fff; }
+    .bar-inner { height: 100%; background: lime; }
+    #startScreen, #deviceSelect { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #111; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+    #startScreen h1, #deviceSelect h2 { font-size: 32px; margin-bottom: 20px; }
+    #startScreen button, #deviceSelect button { font-size: 20px; margin: 10px; padding: 10px 30px; cursor: pointer; border: none; border-radius: 8px; background-color: #4caf50; color: white; }
+    #explanationModal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); color: white; display: none; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; padding: 20px; z-index: 20; }
+    #winMessage { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.8); color: white; font-size: 32px; z-index: 50; flex-direction: column; animation: fadeIn 1s ease-in-out; }
+    #winMessage p { font-size: 24px; margin-top: 10px; animation: pop 0.8s ease forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    #specialEffect { position: absolute; width: 120px; height: 120px; background: radial-gradient(circle, yellow, orange, red); border-radius: 50%; opacity: 0; z-index: 30; animation: none; }
+    @keyframes boom { 0% { transform: scale(0.5); opacity: 0.3; } 50% { transform: scale(2.5); opacity: 1; } 100% { transform: scale(3); opacity: 0; } }
     #touchControls {
-      position: fixed; bottom: 20px; left: 0; right: 0;
-      display: flex; justify-content: center; flex-wrap: wrap;
-      gap: 10px; padding: 10px; z-index: 20;
+      position: fixed; bottom: 10px; left: 0; right: 0;
+      display: none; justify-content: center; flex-wrap: wrap;
+      gap: 10px; z-index: 100;
     }
-    .btn {
-      width: 60px; height: 60px; font-size: 18px;
-      background: rgba(255,255,255,0.2); color: white;
-      border: 1px solid white; border-radius: 8px;
-      user-select: none; touch-action: none;
-      display: flex; align-items: center; justify-content: center;
+    .btn-img {
+      width: 64px; height: 64px; touch-action: none;
+      user-select: none;
     }
   </style>
 </head>
 <body>
+  <!-- デバイス選択画面 -->
+  <div id="deviceSelect">
+    <h2>どの端末で遊びますか？</h2>
+    <button onclick="selectDevice('pc')">パソコン</button>
+    <button onclick="selectDevice('mobile')">スマホ</button>
+  </div>
 
-<canvas id="game" width="360" height="640"></canvas>
-<div id="ui">
-  <div>PLAYER HP: <span id="php">100</span> / CPU HP: <span id="ehp">100</span></div>
-</div>
-<div id="touchControls">
-  <div class="btn" ontouchstart="keys['left']=true" ontouchend="keys['left']=false">←</div>
-  <div class="btn" ontouchstart="keys['right']=true" ontouchend="keys['right']=false">→</div>
-  <div class="btn" ontouchstart="keys['jump']=true" ontouchend="keys['jump']=false">↑</div>
-  <div class="btn" ontouchstart="keys['atk']=true" ontouchend="keys['atk']=false">攻</div>
-  <div class="btn" ontouchstart="special()">必</div>
-</div>
+  <!-- スタート画面 -->
+  <div id="startScreen" style="display: none;">
+    <h1>スト6風バトルゲーム</h1>
+    <button onclick="startGame()">スタート</button>
+    <button onclick="document.getElementById('explanationModal').style.display='flex'">説明</button>
+  </div>
 
-<audio id="sfx" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_abe9dd2c81.mp3" preload="auto"></audio>
+  <!-- 説明 -->
+  <div id="explanationModal">
+    <p>← → 移動、↑ ジャンプ、スペース 攻撃、X/M 必殺技</p>
+    <button onclick="document.getElementById('explanationModal').style.display='none'">閉じる</button>
+  </div>
 
-<script>
-let canvas = document.getElementById("game");
-let ctx = canvas.getContext("2d");
+  <!-- 勝敗表示 -->
+  <div id="winMessage">
+    <div id="winnerText"></div>
+    <p id="winnerQuote"></p>
+    <button onclick="location.reload()">もう一度</button>
+  </div>
 
-let player = { x: 50, y: 540, w: 60, h: 80, hp: 100, vy: 0, onGround: true };
-let cpu = { x: 250, y: 540, w: 60, h: 80, hp: 100, dir: -1 };
-let keys = {};
+  <!-- HPバー -->
+  <div id="ui">
+    <div>PLAYER HP<div class="bar"><div id="playerHp" class="bar-inner"></div></div></div>
+    <div>CPU HP<div class="bar"><div id="enemyHp" class="bar-inner"></div></div></div>
+  </div>
 
-let playerImg = new Image();
-playerImg.src = "yuta.png"; // ← 自分のフォルダに置いてね
+  <!-- キャンバス・演出 -->
+  <canvas id="gameCanvas" width="960" height="540"></canvas>
+  <div id="specialEffect"></div>
 
-let cpuImg = new Image();
-cpuImg.src = "zombie.png"; // ← 自分のフォルダに置いてね
+  <!-- スマホ用操作ボタン（画像） -->
+  <div id="touchControls">
+    <img src="btn_left.png" class="btn-img" ontouchstart="setKey('left', true)" ontouchend="setKey('left', false)">
+    <img src="btn_right.png" class="btn-img" ontouchstart="setKey('right', true)" ontouchend="setKey('right', false)">
+    <img src="btn_up.png" class="btn-img" ontouchstart="setKey('jump', true)" ontouchend="setKey('jump', false)">
+    <img src="btn_attack.png" class="btn-img" ontouchstart="setKey('atk', true)" ontouchend="setKey('atk', false)">
+    <img src="btn_special.png" class="btn-img" ontouchstart="triggerSpecial()">
+  </div>
 
-function update() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  <!-- 効果音 -->
+  <audio id="specialSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_abe9dd2c81.mp3" preload="auto"></audio>
 
-  // 移動
-  if (keys["left"]) player.x -= 4;
-  if (keys["right"]) player.x += 4;
+  <script>
+    let isMobile = false, canvas, ctx, player, cpu, keys = {}, gameInterval;
+    let velocityY = 0, onGround = true;
 
-  // ジャンプ
-  if (keys["jump"] && player.onGround) {
-    player.vy = -12;
-    player.onGround = false;
-  }
+    // キャラ画像
+    let playerImg = new Image();
+    let cpuImg = new Image();
+    playerImg.src = "yuta.png";   // 自分の画像を用意
+    cpuImg.src = "zombie.png";    // 敵の画像を用意
 
-  // 重力
-  player.vy += 0.5;
-  player.y += player.vy;
-  if (player.y > 540) {
-    player.y = 540;
-    player.vy = 0;
-    player.onGround = true;
-  }
+    function setKey(key, value) {
+      keys[key] = value;
+    }
 
-  // 攻撃
-  if (keys["atk"]) {
-    if (Math.abs(player.x - cpu.x) < 60) cpu.hp -= 0.3;
-  }
+    function selectDevice(device) {
+      isMobile = (device === 'mobile');
+      document.getElementById('deviceSelect').style.display = 'none';
+      document.getElementById('startScreen').style.display = 'flex';
+    }
 
-  // CPU自動移動・攻撃
-  cpu.x += cpu.dir * 2;
-  if (cpu.x < 50 || cpu.x > 250) cpu.dir *= -1;
-  if (Math.abs(cpu.x - player.x) < 60) player.hp -= 0.2;
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameCanvas').style.display = 'block';
+      document.getElementById('ui').style.display = 'flex';
+      if (isMobile) document.getElementById('touchControls').style.display = 'flex';
 
-  // 描画
-  ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
-  ctx.drawImage(cpuImg, cpu.x, cpu.y, cpu.w, cpu.h);
+      canvas = document.getElementById('gameCanvas');
+      ctx = canvas.getContext('2d');
+      player = { x: 100, y: 440, w: 50, h: 100, hp: 100 };
+      cpu = { x: 800, y: 440, w: 50, h: 100, hp: 100, dir: -1 };
+      gameInterval = setInterval(updateGame, 1000 / 60);
+    }
 
-  document.getElementById("php").textContent = Math.max(0, Math.floor(player.hp));
-  document.getElementById("ehp").textContent = Math.max(0, Math.floor(cpu.hp));
+    document.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (k === 'arrowleft') keys['left'] = true;
+      if (k === 'arrowright') keys['right'] = true;
+      if (k === 'arrowup') keys['jump'] = true;
+      if (k === ' ') keys['atk'] = true;
+      if (k === 'x' || k === 'm') triggerSpecial();
+    });
 
-  if (player.hp <= 0 || cpu.hp <= 0) {
-    setTimeout(() => {
-      alert((player.hp > cpu.hp ? "PLAYER" : "CPU") + " WINS!");
-      location.reload();
-    }, 200);
-    return;
-  }
+    document.addEventListener('keyup', e => {
+      const k = e.key.toLowerCase();
+      if (k === 'arrowleft') keys['left'] = false;
+      if (k === 'arrowright') keys['right'] = false;
+      if (k === 'arrowup') keys['jump'] = false;
+      if (k === ' ') keys['atk'] = false;
+    });
 
-  requestAnimationFrame(update);
-}
-update();
+    function updateGame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-function special() {
-  const audio = document.getElementById("sfx");
-  if (Math.abs(player.x - cpu.x) < 100) cpu.hp -= 10;
-  audio.currentTime = 0;
-  audio.play();
-}
-</script>
+      // 移動・ジャンプ
+      if (keys['left']) player.x -= 5;
+      if (keys['right']) player.x += 5;
+      if (keys['jump'] && onGround) {
+        velocityY = -12;
+        onGround = false;
+      }
 
+      // 重力
+      velocityY += 0.5;
+      player.y += velocityY;
+      if (player.y >= 440) {
+        player.y = 440;
+        velocityY = 0;
+        onGround = true;
+      }
+
+      // 攻撃処理
+      if (keys['atk']) {
+        if (Math.abs(player.x - cpu.x) < 60 && Math.abs(player.y - cpu.y) < 50) {
+          cpu.hp -= 0.5;
+        }
+      }
+
+      // CPU移動・攻撃
+      cpu.x += cpu.dir * 2;
+      if (cpu.x < 600) cpu.dir = 1;
+      if (cpu.x > 880) cpu.dir = -1;
+      if (Math.abs(cpu.x - player.x) < 60 && Math.abs(cpu.y - player.y) < 50) {
+        player.hp -= 0.3;
+      }
+
+      // 描画
+      ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
+      ctx.drawImage(cpuImg, cpu.x, cpu.y, cpu.w, cpu.h);
+
+      document.getElementById('playerHp').style.width = player.hp + '%';
+      document.getElementById('enemyHp').style.width = cpu.hp + '%';
+
+      // 勝敗
+      if (player.hp <= 0 || cpu.hp <= 0) {
+        clearInterval(gameInterval);
+        const winner = player.hp > cpu.hp ? 'PLAYER' : 'CPU';
+        const msg = winner === 'PLAYER' ? 'あほんだら！' : 'CPUの勝利...もっと鍛えよう！';
+        document.getElementById('winnerText').textContent = winner + ' WINS!';
+        document.getElementById('winnerQuote').textContent = msg;
+        document.getElementById('winMessage').style.display = 'flex';
+      }
+    }
+
+    function triggerSpecial() {
+      const fx = document.getElementById('specialEffect');
+      const audio = document.getElementById('specialSound');
+      fx.style.left = (player.x + 25) + 'px';
+      fx.style.top = (player.y + 20) + 'px';
+      fx.style.animation = 'boom 0.6s ease-out';
+      fx.style.opacity = 1;
+      if (Math.abs(player.x - cpu.x) < 100 && Math.abs(player.y - cpu.y) < 60) cpu.hp -= 5;
+      audio.currentTime = 0; audio.play();
+      setTimeout(() => {
+        fx.style.animation = 'none';
+        fx.style.opacity = 0;
+      }, 600);
+    }
+  </script>
 </body>
 </html>
